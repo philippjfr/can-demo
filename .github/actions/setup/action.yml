@@ -1,0 +1,14 @@
+name: setup
+description: Python, CPU-only torch, this package and the Outerbounds client
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+        cache: pip
+    - shell: bash
+      run: |
+        # The default Linux torch wheel pulls the CUDA stack; the CPU index is far smaller.
+        pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+        pip install -e . outerbounds pytest ruff pyyaml pandas

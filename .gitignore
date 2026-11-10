@@ -1,0 +1,13 @@
+__pycache__/
+*.egg-info/
+.ipynb_checkpoints/
+.pytest_cache/
+.ruff_cache/
+.metaflow/
+config/demo.env
+data/
+artifacts/
+build/
+*.onnx
+*.safetensors
+.ob_apps/

@@ -1,0 +1,15 @@
+$ make promote RUN=73006   # weak small CNN run
+Run TrainCanDetectorFlow/73006: F1 0.7657, threshold 0.90
+Approver: prudiger@anaconda.com
+REFUSED: not promoted, no tags changed.
+  - test F1 0.7657 is below the threshold 0.9000
+ERROR conda.cli.main_run:execute(148): `conda run python -W ignore scripts/promote.py 73006` failed. (See above for error)
+
+$ make promote RUN=73007   # without the build step
+Run TrainCanDetectorFlow/73007: F1 0.9933, threshold 0.90
+Approver: prudiger@anaconda.com
+PROMOTED
+  tags added: production, approved_by:prudiger@anaconda.com, approved_at:2026-11-03T16:24:50Z, eval_f1:0.9933
+  retired production runs: none
+
+Next: watch BuildEdgeImageFlow and the build-image workflow, then deploy the dashboard.

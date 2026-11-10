@@ -1,0 +1,14 @@
+# Deployed by `make deploy-dashboard`, which stages app.py and candetect/ into build/dashboard.
+# The websocket origin and the onnxruntime workaround are passed with --env by the Makefile.
+name: candetect-monitor
+port: 8000
+description: Can detection model monitor
+auth:
+  type: Browser
+
+commands:
+  - panel serve app.py --port 8000 --address 0.0.0.0 --warm --allow-websocket-origin="$DASHBOARD_WS_ORIGIN"
+
+environment:
+  BOKEH_RESOURCES: cdn
+  DASHBOARD_WARM_CHECK: "1"

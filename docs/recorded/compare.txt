@@ -1,0 +1,14 @@
+$ make compare
+Runs of TrainCanDetectorFlow, newest first. Promotion threshold: F1 >= 0.90
+
+  run     created               arch  epochs  images     f1 accuracy recall    dataset production           approved_by    gate
+73007 11-03 15:29 mobilenet_v3_small       6    2000 0.9933   0.9933 0.9867 ced936f203        yes prudiger@anaconda.com      ok
+73006 11-03 15:29          small_cnn       2    2000 0.7657   0.7267 0.8933 ced936f203                                  refused
+73005 11-03 15:23 mobilenet_v3_small       6    2000 0.9933   0.9933 0.9867 ced936f203                                       ok
+72997 11-03 15:10 mobilenet_v3_small       1     300 0.0000   0.5000 0.0000 56b323f3ed                                  refused
+
+Note: these runs used different data versions (dataset column), so metrics are not
+directly comparable.
+Best eligible run: 73007 (F1 0.9933)
+Run 73006 would be refused: test F1 0.7657 is below the threshold 0.9000
+Run 72997 would be refused: test F1 0.0000 is below the threshold 0.9000

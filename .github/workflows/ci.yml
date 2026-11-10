@@ -1,0 +1,101 @@
+name: ci
+
+# Pull requests: lint and test, then deploy a branch copy of the flows next to production.
+# With a single perimeter, @project branches stand in for separate experimentation and
+# production perimeters: this workflow writes to branch `test.pr<N>`, deploy.yml to `prod`.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, closed]
+
+permissions:
+  contents: read
+
+env:
+  CANDETECT_CONDA_CHANNELS: ${{ vars.CANDETECT_CONDA_CHANNELS }}
+  CANDETECT_REGISTRY: ${{ vars.CANDETECT_REGISTRY }}
+  CANDETECT_BASE_IMAGE: ${{ vars.CANDETECT_BASE_IMAGE }}
+  BRANCH: pr${{ github.event.number }}
+
+jobs:
+  test:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: ruff check src tests flows scripts dashboard edge
+      - run: pytest -q
+
+  deploy-branch:
+    needs: test
+    timeout-minutes: 45
+    # Fork PRs get no OIDC token, so they run tests only.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+
+      # OB_MACHINE_USER_PR is a machine user restricted to pull_request runs of this repository.
+      - name: Authenticate to the platform with the GitHub OIDC token
+        run: |
+          outerbounds service-principal-configure \
+            --name "${{ vars.OB_MACHINE_USER_PR }}" \
+            --deployment-domain "${{ vars.OB_DEPLOYMENT_DOMAIN }}" \
+            --perimeter "${{ vars.OB_PERIMETER_EXPERIMENT || 'default' }}" \
+            --github-actions
+
+      - name: Deploy branch copies of both flows
+        run: |
+          for flow in train_flow build_image_flow; do
+            python flows/$flow.py --environment=fast-bakery --branch "$BRANCH" argo-workflows create \
+              --tag "commit-hash:${{ github.sha }}" \
+              --tag "ci-run:${{ github.run_id }}"
+          done
+
+      # Trains with this PR's code on the branch deployment, waits, then compares with production.
+      - name: Train on the branch deployment and compare with production
+        run: python scripts/pr_report.py --branch "$BRANCH" --out build/pr-report
+
+      - name: Attach the model cards
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-cards
+          path: build/pr-report
+          if-no-files-found: ignore
+
+      - name: Comment the comparison on the pull request
+        if: always() && hashFiles('build/pr-report/report.md') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr comment "${{ github.event.number }}" \
+            --body-file build/pr-report/report.md --edit-last --create-if-none
+
+  cleanup:
+    if: github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - name: Authenticate to the platform with the GitHub OIDC token
+        run: |
+          outerbounds service-principal-configure \
+            --name "${{ vars.OB_MACHINE_USER_PR }}" \
+            --deployment-domain "${{ vars.OB_DEPLOYMENT_DOMAIN }}" \
+            --perimeter "${{ vars.OB_PERIMETER_EXPERIMENT || 'default' }}" \
+            --github-actions
+      - name: Delete the branch deployments
+        run: |
+          for flow in train_flow build_image_flow; do
+            python flows/$flow.py --environment=fast-bakery --branch "$BRANCH" argo-workflows delete
+          done
