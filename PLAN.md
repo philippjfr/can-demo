@@ -176,6 +176,10 @@ What changed from the plan above, and what the platform actually did.
 - Added `candetect/promotion.py`, `drift.py`, `onnx_check.py`, `publish.py`, a shared setup action for the workflows, `manual_tests/` and `docs/recorded/`.
 - The GitHub owner and repository name were not provided, so `CANDETECT_GITHUB_REPO` is a placeholder and `promote.py` skips the GitHub build until it is set.
 
+### Verified on GitHub afterwards
+
+With `philippjfr/can-demo` and two machine users (`can-demo-pr` restricted to the `ci` workflow, `can-demo-main` restricted to `main`): OIDC authentication for both, the production deployment (which issued the production tokens), a pull request that trained on a branch deployment and received the comparison comment and the `model-cards` artifact, and `build-image.yml` end to end (fetch with the production-tag check, build, label check, prediction inside the image, push to GHCR, `edge_image:` tag written to the run). The production event sensor took roughly 35 minutes to become active after the deploy.
+
 ### Not verified
 
-GitHub workflows end to end, `gh workflow run`, the `docker build`, and a `--production` deploy, because no repository, machine users or Docker daemon were available. Whether `@anaconda_base` uses organisation channels automatically. The dashboard page rendered on the platform: the app uses Browser SSO so it could not be opened headless (its startup log does confirm Client API access from inside the container).
+A local `docker build` (GitHub Actions built the image), whether `@anaconda_base` uses organisation channels automatically, and the dashboard page rendering on the platform (the app uses Browser SSO so it could not be opened headless; its startup log confirms Client API access from inside the container).

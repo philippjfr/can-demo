@@ -18,9 +18,11 @@ If two perimeters are available, set `CANDETECT_PERIMETER_EXPERIMENT` and `CANDE
 
 ## What was verified, and what was not
 
-Run against the real platform while building: the training flow and its card, loading a platform run in a notebook, compare and promote (including the refusal), the promotion event starting the deployed build flow (on a throwaway branch deployment, since deleted), and the dashboard app deployment. The dashboard was tested against live platform data locally and in a browser. The deployed app uses Browser SSO, so it could not be opened headless. Its startup log (`outerbounds app logs --name candetect-monitor --project can_detection_demo --branch prod --worker-id <id>`) confirms that the Metaflow Client API works from inside the app container: `read 4 runs from platform; model run TrainCanDetectorFlow/73007`. The page itself has not been viewed in a browser on the platform.
+Run against the real platform and GitHub (repository `philippjfr/can-demo`): the training flow and its card, loading a platform run in a notebook, compare and promote (including the refusal), the promotion event starting the deployed build flow, the dashboard app deployment, and all three GitHub workflows. That includes OIDC authentication with both machine users, the production deployment from `deploy.yml`, a pull request that trained on a branch deployment and received the comparison comment and model cards, and `build-image.yml`, which built the edge image, checked its labels, ran a prediction inside it, pushed it to GHCR and recorded it on the model run.
 
-Not run, because they need a GitHub repository, machine users or a Docker daemon that were not available: the three GitHub workflows (they pass `actionlint`), `gh workflow run`, `docker build` of the edge image, and a `--production` deployment. `edge/serve.py` was tested against the real promoted model in a clean virtualenv with the Dockerfile's exact dependencies. The first real run of those pieces will happen in your repository.
+The dashboard was tested against live platform data locally and in a browser. The deployed app uses Browser SSO, so it could not be opened headless. Its startup log (`outerbounds app logs --name candetect-monitor --project can_detection_demo --branch prod --worker-id <id>`) confirms that the Metaflow Client API works from inside the app container: `read 4 runs from platform; model run TrainCanDetectorFlow/73007`. The page itself has not been viewed in a browser on the platform.
+
+Not verified: a local `docker build` (the image was built by GitHub Actions instead), and whether `@anaconda_base` uses organisation channels automatically.
 
 ## Setup
 
@@ -162,7 +164,7 @@ make build-image    # redo the build for the current production run
 Two platform details found while building:
 
 - onnxruntime requests an executable stack, which glibc 2.41 (the platform's Debian 13 base image) refuses to load. The flows set `GLIBC_TUNABLES=glibc.rtld.execstack=2` on the steps that import it, and the Dockerfile sets it too so a Debian 13 base image also works.
-- After `argo-workflows create` the event sensor took several minutes to become active. Events published in that window were lost. Deploy ahead of the demo, not during it.
+- After `argo-workflows create` the event sensor takes a long time to become active. On the test branch it was a few minutes. For the production deployment, events published in the first 30 minutes or so were lost, and the first one that worked came about 35 minutes after the deploy. Events published while the sensor is not active are not queued. Deploy production well ahead of the demo, and do not redeploy shortly before it: any push to `main` runs `deploy.yml` and redeploys production, which resets the sensor. Use `[skip ci]` in commit messages for documentation-only changes.
 
 If this fails live: show `docs/recorded/build_manifest_card.html` and the `edge/Dockerfile` labels, and walk through `.github/workflows/build-image.yml`.
 
