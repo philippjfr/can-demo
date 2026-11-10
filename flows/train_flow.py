@@ -18,7 +18,7 @@ from _env import ONNXRUNTIME_ENV, PROJECT, conda_env
 class TrainCanDetectorFlow(FlowSpec):
     n_images = Parameter("n-images", default=2000, type=int, help="Synthetic images to generate")
     seed = Parameter("seed", default=7, type=int, help="Dataset and training seed")
-    epochs = Parameter("epochs", default=6, type=int, help="Fine-tuning epochs")
+    epochs = Parameter("epochs", default=3, type=int, help="Fine-tuning epochs")
     arch = Parameter(
         "arch", default="mobilenet_v3_small", help="mobilenet_v3_small or small_cnn (from scratch)"
     )
