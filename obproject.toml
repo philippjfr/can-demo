@@ -1,0 +1,9 @@
+platform = 'gtm-01.outerbounds.xyz'
+project = 'can_detection_demo'
+title = 'Can dead plate detection'
+
+[dependencies]
+# Flows declare their environment with @anaconda_base (candetect.flowenv), and the dashboard lists
+# its own dependencies in its config.yml. The root pyproject.toml is for local development only.
+include_pyproject_toml = false
+environment = 'fast-bakery'

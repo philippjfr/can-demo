@@ -1,21 +1,22 @@
 """Train the can classifier on the platform.
 
 Mirrors notebooks/01_train_locally.ipynb: the same candetect functions in the same order. The flow
-only adds steps, decorators, artifacts and a card.
+only adds steps, decorators, artifacts and a card. Run it from the project root so obproject.toml
+resolves.
 """
 
 from datetime import UTC, datetime
 
-from metaflow import FlowSpec, Parameter, card, current, project, resources, step
+from metaflow import Parameter, card, current, resources, step
 from metaflow import environment as step_environment
 from metaflow.cards import Image, Markdown, Table
+from obproject import ProjectFlow
 
-from _env import ONNXRUNTIME_ENV, PROJECT, conda_env
+from candetect.flowenv import ONNXRUNTIME_ENV, conda_env
 
 
-@project(name=PROJECT)
 @conda_env
-class TrainCanDetectorFlow(FlowSpec):
+class TrainCanDetectorFlow(ProjectFlow):
     n_images = Parameter("n-images", default=2000, type=int, help="Synthetic images to generate")
     seed = Parameter("seed", default=7, type=int, help="Dataset and training seed")
     epochs = Parameter("epochs", default=6, type=int, help="Fine-tuning epochs")

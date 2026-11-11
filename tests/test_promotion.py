@@ -1,7 +1,5 @@
 import subprocess
-import sys
 from datetime import UTC, datetime
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -147,18 +145,17 @@ def test_summarize_run_flags_production_and_refusals():
     assert refused["gate"] == "refused" and refused["gate_reasons"]
 
 
-def test_flow_project_name_matches_config():
-    sys.path.insert(0, str(Path(__file__).parents[1] / "flows"))
-    try:
-        import _env
-    finally:
-        sys.path.pop(0)
-    assert _env.PROJECT == PROJECT_NAME
-    assert _env.PROMOTION_EVENT == PROMOTION_EVENT
-
-
 def test_image_tag_is_docker_safe():
     from candetect.promotion import image_tag
 
     assert image_tag("20261103-argo-flow/73007@x") == "20261103-argo-flow-73007-x"
     assert len(image_tag("a" * 300)) == 128
+
+
+def test_branch_label_matches_the_project_ui():
+    from candetect.promotion import branch_label
+
+    assert branch_label({"project_branch:user.jane@example.com"}) == "scratch"
+    assert branch_label({"project_branch:prod"}) == "main"
+    assert branch_label({"project_branch:test.demo_fewer_epochs"}) == "demo_fewer_epochs"
+    assert branch_label({"user:jane"}) == ""

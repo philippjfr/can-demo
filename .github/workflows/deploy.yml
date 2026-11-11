@@ -1,6 +1,7 @@
 name: deploy
 
-# Merges to main deploy the production versions (@project branch `prod`).
+# Merges to main deploy the production project with obproject-deploy: flows (Metaflow branch
+# `prod`, shown as `main` in the project UI) and the dashboard app.
 # Only the machine user in OB_MACHINE_USER_MAIN may deploy production: the first production deploy
 # of a flow issues a production token, and any other user needs it passed with --authorize.
 on:
@@ -15,6 +16,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  GH_REF: ${{ github.ref_name }}
   CANDETECT_CONDA_CHANNELS: ${{ vars.CANDETECT_CONDA_CHANNELS }}
   CANDETECT_REGISTRY: ${{ vars.CANDETECT_REGISTRY }}
   CANDETECT_BASE_IMAGE: ${{ vars.CANDETECT_BASE_IMAGE }}
@@ -25,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
-      - run: ruff check src tests flows scripts dashboard edge
+      - run: ruff check src tests flows scripts deployments edge manual_tests
       - run: pytest -q
 
   deploy:
@@ -36,6 +38,8 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: ./.github/actions/setup
 
       - name: Authenticate to the platform with the GitHub OIDC token
@@ -46,10 +50,5 @@ jobs:
             --perimeter "${{ vars.OB_PERIMETER_PROD || 'default' }}" \
             --github-actions
 
-      - name: Deploy the production flows
-        run: |
-          for flow in train_flow build_image_flow; do
-            python flows/$flow.py --environment=fast-bakery --production argo-workflows create \
-              --tag "commit-hash:${{ github.sha }}" \
-              --tag "ci-run:${{ github.run_id }}"
-          done
+      - name: Deploy the project
+        run: obproject-deploy

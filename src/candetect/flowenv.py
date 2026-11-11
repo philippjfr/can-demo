@@ -1,5 +1,8 @@
 """Environment declaration shared by the flows.
 
+Flows import this module, which also makes Metaflow ship the candetect package (see
+METAFLOW_PACKAGE_POLICY in candetect/__init__.py) with the code package.
+
 Packages resolve from the channels in CANDETECT_CONDA_CHANNELS at deploy time (default: the public
 Anaconda ``main`` channel). Versions are pinned to what exists on ``main`` for linux-64, the
 platform's architecture.
@@ -9,9 +12,6 @@ import os
 
 from metaflow import anaconda_base
 
-import candetect  # noqa: F401  Imported so Metaflow ships it (METAFLOW_PACKAGE_POLICY) with the flow.
-
-PROJECT = "can_detection_demo"
 PROMOTION_EVENT = "candetect_model_promoted"
 PYTHON = "3.12"
 

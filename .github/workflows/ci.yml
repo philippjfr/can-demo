@@ -1,8 +1,9 @@
 name: ci
 
-# Pull requests: lint and test, then deploy a branch copy of the flows next to production.
-# With a single perimeter, @project branches stand in for separate experimentation and
-# production perimeters: this workflow writes to branch `test.pr<N>`, deploy.yml to `prod`.
+# Pull requests: lint and test, then deploy a branch copy of the project next to production,
+# train on it with the PR's code, and compare the result with the production model.
+# With a single perimeter, project branches stand in for separate experimentation and production
+# perimeters: this workflow writes to the branch `test.<git branch>`, deploy.yml to `main`.
 on:
   pull_request:
     branches: [main]
@@ -12,10 +13,12 @@ permissions:
   contents: read
 
 env:
+  # obproject-deploy reads the branch name from these.
+  GH_HEAD_REF: ${{ github.head_ref }}
+  GH_REF: ${{ github.ref_name }}
   CANDETECT_CONDA_CHANNELS: ${{ vars.CANDETECT_CONDA_CHANNELS }}
   CANDETECT_REGISTRY: ${{ vars.CANDETECT_REGISTRY }}
   CANDETECT_BASE_IMAGE: ${{ vars.CANDETECT_BASE_IMAGE }}
-  BRANCH: pr${{ github.event.number }}
 
 jobs:
   test:
@@ -24,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
-      - run: ruff check src tests flows scripts dashboard edge
+      - run: ruff check src tests flows scripts deployments edge manual_tests
       - run: pytest -q
 
   deploy-branch:
@@ -39,9 +42,12 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
       - uses: ./.github/actions/setup
 
-      # OB_MACHINE_USER_PR is a machine user restricted to pull_request runs of this repository.
+      # OB_MACHINE_USER_PR is a machine user restricted to the `ci` workflow of this repository.
       - name: Authenticate to the platform with the GitHub OIDC token
         run: |
           outerbounds service-principal-configure \
@@ -50,17 +56,13 @@ jobs:
             --perimeter "${{ vars.OB_PERIMETER_EXPERIMENT || 'default' }}" \
             --github-actions
 
-      - name: Deploy branch copies of both flows
-        run: |
-          for flow in train_flow build_image_flow; do
-            python flows/$flow.py --environment=fast-bakery --branch "$BRANCH" argo-workflows create \
-              --tag "commit-hash:${{ github.sha }}" \
-              --tag "ci-run:${{ github.run_id }}"
-          done
+      # Flows only: the dashboard deploys from main (deployments/monitor/obproject_deploy.toml).
+      - name: Deploy the branch copy
+        run: obproject-deploy --skip-apps --skip-assets
 
-      # Trains with this PR's code on the branch deployment, waits, then compares with production.
-      - name: Train on the branch deployment and compare with production
-        run: python scripts/pr_report.py --branch "$BRANCH" --out build/pr-report
+      # Trains with this PR's code on the branch copy, waits, then compares with production.
+      - name: Train on the branch copy and compare with production
+        run: python scripts/pr_report.py --out build/pr-report
 
       - name: Attach the model cards
         if: always()
@@ -86,6 +88,8 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
       - uses: ./.github/actions/setup
       - name: Authenticate to the platform with the GitHub OIDC token
         run: |
@@ -94,8 +98,8 @@ jobs:
             --deployment-domain "${{ vars.OB_DEPLOYMENT_DOMAIN }}" \
             --perimeter "${{ vars.OB_PERIMETER_EXPERIMENT || 'default' }}" \
             --github-actions
-      - name: Delete the branch deployments
+      - name: Tear down the branch copy
         run: |
-          for flow in train_flow build_image_flow; do
-            python flows/$flow.py --environment=fast-bakery --branch "$BRANCH" argo-workflows delete
-          done
+          project=$(python -c "import tomllib; print(tomllib.load(open('obproject.toml','rb'))['project'])")
+          branch=$(python -c "from candetect.config import project_branch; print(project_branch('${GH_HEAD_REF}'))")
+          outerbounds flowproject teardown-branch --id "$project/$branch" --yes
