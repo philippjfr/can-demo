@@ -27,4 +27,5 @@ dependencies:
   - pip
   - pip:
       - outerbounds
+      - ob-project-utils
       - -e .

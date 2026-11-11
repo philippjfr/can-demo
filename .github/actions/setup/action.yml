@@ -11,4 +11,8 @@ runs:
       run: |
         # The default Linux torch wheel pulls the CUDA stack; the CPU index is far smaller.
         pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-        pip install -e . outerbounds pytest ruff pyyaml pandas
+        pip install -e . outerbounds ob-project-utils pytest ruff pyyaml pandas
+        # The editable install leaves src/candetect.egg-info behind. With src/ on the PYTHONPATH,
+        # Metaflow would package it as an empty distribution and `import torch` then fails in the
+        # pod (importlib.metadata finds a distribution without a name). The install keeps working.
+        rm -rf src/*.egg-info

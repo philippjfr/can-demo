@@ -44,15 +44,32 @@ def trigger(branch: str, env: str, train_args: str) -> str:
     return run_id if "/" in run_id else f"{TRAIN_FLOW}/{run_id}"
 
 
-def wait(pathspec: str, timeout: int, poll: int = 15) -> str:
+def argo_status(pathspec: str, branch: str, env: str) -> str:
+    """Argo's own view of the run. A crashed pod never finishes its Metaflow task, so the Client
+    API alone keeps reporting ``running``."""
+    run_id = pathspec.split("/", 1)[1]
+    out = subprocess.run(
+        [sys.executable, "flows/train/flow.py", f"--environment={env}", "--branch", branch,
+         "argo-workflows", "status", run_id],
+        capture_output=True, text=True,
+    ).stdout.strip().splitlines()  # fmt: skip
+    return out[-1].strip() if out else ""
+
+
+def wait(pathspec: str, timeout: int, branch: str, env: str, poll: int = 15) -> str:
     """Block until the run succeeds or fails. Returns the final state."""
     namespace(None)
     started = time.time()
+    last_argo_check = started
     while time.time() - started < timeout:
         try:
             state = run_state(Run(pathspec))
         except MetaflowNotFound:
             state = "running"  # Argo registers the run a few seconds after the trigger
+        if state == "running" and time.time() - last_argo_check > 60:
+            last_argo_check = time.time()
+            if argo_status(pathspec, branch, env) in ("Failed", "Error"):
+                state = "failed"
         print(f"[{int(time.time() - started):4d}s] {pathspec}: {state}", flush=True)
         if state != "running":
             return state
@@ -101,7 +118,7 @@ def main() -> int:
     if "/" not in pathspec:
         pathspec = f"{TRAIN_FLOW}/{pathspec}"
     print(f"training run: {pathspec}", flush=True)
-    state = "succeeded" if args.run else wait(pathspec, args.timeout)
+    state = "succeeded" if args.run else wait(pathspec, args.timeout, args.branch, cfg.metaflow_env)
     if state != "succeeded":
         body = (
             f"{MARKER}\n## Model comparison: pull request against production\n\n"

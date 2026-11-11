@@ -22,6 +22,7 @@ PROJECT := $(shell python3 -c "import tomllib;print(tomllib.load(open('obproject
 setup: ## Create the environment and config, check the platform connection
 	@test -f config/demo.env || cp config/demo.env.example config/demo.env
 	@conda env list | grep -q "^$(ENV_NAME) " || conda env create -y -f environment.yml
+	@rm -rf src/*.egg-info
 	@$(CONDA_RUN) python -W ignore -c "import torch, torchvision, onnxruntime, safetensors, metaflow; print('python deps ok, torch', torch.__version__)"
 	@$(CONDA_RUN) outerbounds check
 	@echo
@@ -70,12 +71,14 @@ build-image: ## Step 6: (re)start the edge image build for the current productio
 
 deploy-dashboard: ## Step 8: deploy the monitoring dashboard (what CI does on main)
 	@test "$(GIT_BRANCH)" = "main" || (echo "The dashboard deploys from main only (deployments/monitor/obproject_deploy.toml). You are on $(GIT_BRANCH)."; exit 2)
+	rm -rf src/*.egg-info
 	$(CONDA_RUN) obproject-deploy --skip-flows --skip-assets
 	@echo
 	@echo "Next: open the app URL from 'outerbounds app info --name candetect-monitor --project $(PROJECT) --branch main'."
 
 pr-preview: ## Rehearse ci.yml on this git branch: deploy a branch copy, train, compare with production
 	@test "$(GIT_BRANCH)" != "main" || (echo "Switch to a feature branch first: this deploys a branch copy."; exit 2)
+	rm -rf src/*.egg-info
 	$(CONDA_RUN) obproject-deploy --skip-apps --skip-assets
 	$(PY) -W ignore scripts/pr_report.py --train-args "$(PR_ARGS)"
 	@echo
