@@ -3,29 +3,34 @@
 Started by the event that scripts/promote.py publishes after tagging a run `production`. The
 platform cannot build a standalone image with a model and labels baked in, so the image itself is
 built by .github/workflows/build-image.yml (see README, "Image build fallback"). This flow checks
-provenance on the platform and records the manifest the build must match.
+provenance on the platform and records the manifest the build must match. Run it from the project
+root so obproject.toml resolves.
 """
 
 from metaflow import (
-    FlowSpec,
     Parameter,
     card,
     current,
     namespaced_event_name,
-    project,
     resources,
     step,
     trigger,
 )
 from metaflow import environment as step_environment
 from metaflow.cards import Markdown, Table
+from obproject import ProjectFlow
 
-from _env import BASE_IMAGE, ONNXRUNTIME_ENV, PROJECT, PROMOTION_EVENT, REGISTRY, conda_env
+from candetect.flowenv import (
+    BASE_IMAGE,
+    ONNXRUNTIME_ENV,
+    PROMOTION_EVENT,
+    REGISTRY,
+    conda_env,
+)
 
 IMAGE_NAME = "can-detection-edge"
 
 
-@project(name=PROJECT)
 @trigger(
     event={
         "name": namespaced_event_name(PROMOTION_EVENT),
@@ -38,7 +43,7 @@ IMAGE_NAME = "can-detection-edge"
     }
 )
 @conda_env
-class BuildEdgeImageFlow(FlowSpec):
+class BuildEdgeImageFlow(ProjectFlow):
     pathspec = Parameter("pathspec", default="", help="Promoted run, e.g. TrainCanDetectorFlow/123")
     model_version = Parameter("model_version", default="", help="Expected model version")
     dataset_hash = Parameter("dataset_hash", default="", help="Expected dataset sha256")

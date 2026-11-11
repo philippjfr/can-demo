@@ -1,7 +1,7 @@
 # pyright: reportAssignmentType=false
 """Monitoring dashboard: production model, metrics across runs, recent predictions, input drift.
 
-Serve locally:   panel serve dashboard/app.py --dev --show
+Serve locally:   panel serve deployments/monitor/app.py --dev --show
 Without platform access, set DASHBOARD_MOCK=1 to read the artifacts that notebook 01 wrote.
 """
 

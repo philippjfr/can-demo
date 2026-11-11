@@ -1,0 +1,37 @@
+# Deployed by obproject-deploy from main. Commands run from the project root, and src/ is on the
+# PYTHONPATH, so the app imports candetect directly.
+name: candetect-monitor
+port: 8000
+description: Can detection model monitor
+auth:
+  type: Browser
+
+resources:
+  cpu: "1"
+  memory: 2Gi
+
+# Deliberately no torch: the dashboard needs ONNX inference, data generation and the Client API.
+dependencies:
+  python: "3.12"
+  pypi:
+    numpy: ""
+    pandas: ""
+    pillow: ""
+    onnxruntime: ""
+    outerbounds: ""
+    panel: ""
+    panel-material-ui: ""
+    hvplot: ""
+    holoviews: ""
+    bokeh: ""
+
+commands:
+  - panel serve deployments/monitor/app.py --port 8000 --address 0.0.0.0 --warm --allow-websocket-origin="$DASHBOARD_WS_ORIGIN"
+
+environment:
+  BOKEH_RESOURCES: cdn
+  DASHBOARD_WARM_CHECK: "1"
+  # Wildcards match one level; this is the app domain of the gtm-01 deployment.
+  DASHBOARD_WS_ORIGIN: "*.gtm-01.outerbounds.xyz"
+  # onnxruntime requests an executable stack, which the Debian 13 base image's glibc refuses.
+  GLIBC_TUNABLES: glibc.rtld.execstack=2

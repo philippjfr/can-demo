@@ -7,6 +7,7 @@ Nothing here is secret.
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 
 # @project names allow only lowercase letters, digits and underscores.
@@ -18,6 +19,16 @@ PROMOTION_EVENT = "candetect_model_promoted"
 # Tensor names of the exported ONNX graph.
 INPUT_NAME = "image"
 OUTPUT_NAME = "logits"
+
+
+def project_branch(git_branch: str) -> str:
+    """The branch name obproject-deploy gives a git branch: ``-`` and ``/`` become ``_``, lowercase.
+
+    ``main`` keeps its name (it deploys as the production branch, ``prod``, in Metaflow terms).
+    """
+    if git_branch in ("main", "master"):
+        return git_branch
+    return re.sub(r"[-/]", "_", git_branch).lower()
 
 
 @dataclass(frozen=True)

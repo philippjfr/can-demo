@@ -1,7 +1,5 @@
 import subprocess
-import sys
 from datetime import UTC, datetime
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -145,16 +143,6 @@ def test_summarize_run_flags_production_and_refusals():
     assert row["production"] and row["approved_by"] == "jane" and row["gate"] == "ok"
     refused = summarize_run(FakeRun("6", f1=0.5), 0.9)
     assert refused["gate"] == "refused" and refused["gate_reasons"]
-
-
-def test_flow_project_name_matches_config():
-    sys.path.insert(0, str(Path(__file__).parents[1] / "flows"))
-    try:
-        import _env
-    finally:
-        sys.path.pop(0)
-    assert _env.PROJECT == PROJECT_NAME
-    assert _env.PROMOTION_EVENT == PROMOTION_EVENT
 
 
 def test_image_tag_is_docker_safe():

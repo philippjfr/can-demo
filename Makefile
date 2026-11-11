@@ -10,10 +10,11 @@ CONDA_RUN ?= conda run --no-capture-output -n $(ENV_NAME)
 export
 
 CANDETECT_METAFLOW_ENV ?= fast-bakery
-CANDETECT_APP_DOMAIN ?= gtm-01.outerbounds.xyz
-DASHBOARD_BRANCH ?= prod
+PR_ARGS ?=
 RUN ?=
-TRAIN_FLOW := flows/train_flow.py
+TRAIN_FLOW := flows/train/flow.py
+GIT_BRANCH := $(shell git branch --show-current)
+PROJECT := $(shell python3 -c "import tomllib;print(tomllib.load(open('obproject.toml','rb'))['project'])")
 
 .PHONY: setup data train-local flow-local run-remote load-local compare promote build-image \
         deploy-dashboard pr-preview pr-preview-clean reset test lint
@@ -67,35 +68,22 @@ build-image: ## Step 6: (re)start the edge image build for the current productio
 	@echo
 	@echo "Next: watch the build-image workflow in GitHub Actions, then 'make deploy-dashboard'."
 
-deploy-dashboard: ## Step 8: deploy the monitoring dashboard as a platform app
-	rm -rf build/dashboard && mkdir -p build/dashboard
-	cp dashboard/app.py dashboard/requirements.txt build/dashboard/
-	cp -R src/candetect build/dashboard/candetect && find build/dashboard -name __pycache__ -prune -exec rm -rf {} +
-	$(CONDA_RUN) outerbounds app deploy --config-file dashboard/config.yml \
-	  --package-src-path build/dashboard --dep-from-requirements build/dashboard/requirements.txt \
-	  --python 3.12 --project can_detection_demo --branch $(DASHBOARD_BRANCH) --cpu 1 --memory 2Gi \
-	  --env "DASHBOARD_WS_ORIGIN=*.$(CANDETECT_APP_DOMAIN)" \
-	  --env "GLIBC_TUNABLES=glibc.rtld.execstack=2" \
-	  --readiness-condition at_least_one_running --force-upgrade
+deploy-dashboard: ## Step 8: deploy the monitoring dashboard (what CI does on main)
+	@test "$(GIT_BRANCH)" = "main" || (echo "The dashboard deploys from main only (deployments/monitor/obproject_deploy.toml). You are on $(GIT_BRANCH)."; exit 2)
+	$(CONDA_RUN) obproject-deploy --skip-flows --skip-assets
 	@echo
-	@echo "Next: open the app URL printed above (Outerbounds login required)."
+	@echo "Next: open the app URL from 'outerbounds app info --name candetect-monitor --project $(PROJECT) --branch main'."
 
-PR_BRANCH ?= preview
-PR_ARGS ?=
-
-pr-preview: ## Rehearse ci.yml for a pull request: branch deploy, train, compare with production
-	for flow in train_flow build_image_flow; do \
-	  $(PY) -W ignore flows/$$flow.py --environment=$(CANDETECT_METAFLOW_ENV) --branch $(PR_BRANCH) argo-workflows create || exit 1; \
-	done
-	$(PY) -W ignore scripts/pr_report.py --branch $(PR_BRANCH) --train-args "$(PR_ARGS)"
+pr-preview: ## Rehearse ci.yml on this git branch: deploy a branch copy, train, compare with production
+	@test "$(GIT_BRANCH)" != "main" || (echo "Switch to a feature branch first: this deploys a branch copy."; exit 2)
+	$(CONDA_RUN) obproject-deploy --skip-apps --skip-assets
+	$(PY) -W ignore scripts/pr_report.py --train-args "$(PR_ARGS)"
 	@echo
 	@echo "Next: build/pr-report/ holds report.md (the PR comment) and both model cards as HTML."
-	@echo "      Clean up the branch deployments with 'make pr-preview-clean'."
+	@echo "      Clean up the branch deployment with 'make pr-preview-clean'."
 
-pr-preview-clean: ## Delete the branch deployments made by pr-preview
-	for flow in train_flow build_image_flow; do \
-	  $(PY) -W ignore flows/$$flow.py --environment=$(CANDETECT_METAFLOW_ENV) --branch $(PR_BRANCH) argo-workflows delete; \
-	done
+pr-preview-clean: ## Tear down everything pr-preview deployed for this git branch
+	$(CONDA_RUN) outerbounds flowproject teardown-branch --id $(PROJECT)/$(shell $(PY) -c "from candetect.config import project_branch; print(project_branch('$(GIT_BRANCH)'))") --yes
 
 reset: ## Clear local outputs and the production tag so the demo can start over
 	rm -rf artifacts data build
@@ -107,4 +95,4 @@ test: ## Run unit tests
 	$(PY) -m pytest -q
 
 lint: ## Run ruff with the repository config
-	$(CONDA_RUN) ruff check src tests flows scripts dashboard edge
+	$(CONDA_RUN) ruff check src tests flows scripts deployments edge manual_tests

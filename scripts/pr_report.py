@@ -1,9 +1,10 @@
 """Train on a branch deployment and compare the result with the production model.
 
-This is what ci.yml does for a pull request, after the branch copy of the flow is deployed:
+This is what ci.yml does for a pull request, after obproject-deploy has deployed the branch copy.
+Run it from the project root.
 
-    python scripts/pr_report.py --branch pr12
-    python scripts/pr_report.py --branch pr12 --train-args "--epochs 3"
+    python scripts/pr_report.py                       # branch from GH_HEAD_REF or git
+    python scripts/pr_report.py --train-args "--epochs 3"
     python scripts/pr_report.py --run TrainCanDetectorFlow/73007    # compare an existing run
 
 It triggers the deployment, waits for the run, then writes report.md (the PR comment) and the
@@ -24,7 +25,7 @@ from metaflow.cards import get_cards
 from metaflow.exception import MetaflowNotFound
 from metaflow.metaflow_config import UI_URL
 
-from candetect.config import PRODUCTION_TAG, TRAIN_FLOW, settings
+from candetect.config import PRODUCTION_TAG, TRAIN_FLOW, project_branch, settings
 from candetect.promotion import summarize_run
 from candetect.report import MARKER, build_report, run_state
 
@@ -34,7 +35,7 @@ def trigger(branch: str, env: str, train_args: str) -> str:
     with tempfile.TemporaryDirectory() as tmp:
         run_id_file = Path(tmp) / "run_id"
         cmd = [
-            sys.executable, "flows/train_flow.py", f"--environment={env}", "--branch", branch,
+            sys.executable, "flows/train/flow.py", f"--environment={env}", "--branch", branch,
             "argo-workflows", "trigger", "--run-id-file", str(run_id_file),
             *shlex.split(train_args),
         ]  # fmt: skip
@@ -75,14 +76,21 @@ def run_url(run) -> str | None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--branch", help="@project branch name of the PR deployment, e.g. pr12")
+    parser.add_argument(
+        "--branch",
+        help="project branch of the PR deployment (default: GH_HEAD_REF or the current git branch)",
+    )
     parser.add_argument("--run", help="compare this existing run instead of triggering one")
     parser.add_argument("--train-args", default="", help="extra flow parameters for the trigger")
     parser.add_argument("--timeout", type=int, default=1800, help="seconds to wait for the run")
     parser.add_argument("--out", default="build/pr-report")
     args = parser.parse_args()
+    git_branch = os.environ.get("GH_HEAD_REF") or subprocess.run(
+        ["git", "branch", "--show-current"], capture_output=True, text=True
+    ).stdout.strip()
+    args.branch = args.branch or (project_branch(git_branch) if git_branch else None)
     if not (args.branch or args.run):
-        parser.error("give --branch to trigger a run, or --run to compare an existing one")
+        parser.error("not on a git branch: give --branch, or --run to compare an existing run")
 
     cfg = settings()
     out = Path(args.out)
