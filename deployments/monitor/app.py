@@ -11,7 +11,9 @@ import os
 from dataclasses import replace
 from pathlib import Path
 
+import bokeh
 import holoviews as hv
+import hvplot
 import hvplot.pandas  # noqa: F401
 import numpy as np
 import pandas as pd
@@ -23,17 +25,27 @@ from candetect.config import PRODUCTION_TAG, TRAIN_FLOW, settings
 from candetect.data import CLASS_NAMES, DataConfig, generate_dataset, shifted_config
 from candetect.drift import FEATURES, drift_report, image_features, overall_status
 from candetect.inference import LoadedRun, contact_sheet, load_run
-from candetect.promotion import summarize_run
+from candetect.promotion import branch_label, summarize_run
 from candetect.report import short_id
 
 log = logging.getLogger("candetect.dashboard")
 log.setLevel(logging.INFO)
 
+log.info(
+    "panel %s, hvplot %s, holoviews %s, bokeh %s",
+    pn.__version__, hvplot.__version__, hv.__version__, bokeh.__version__,
+)  # fmt: skip
 pn.extension("tabulator", throttled=True)
 pn.widgets.Tabulator.param.theme.default = "materialize"
 pn.indicators.Number.param.font_size.default = "26pt"
 pn.indicators.Number.param.title_size.default = "11pt"
 
+# Key, legend title, colour, marker size.
+METRIC_STYLE = (
+    ("f1", "F1", "#1f77b4", 22),
+    ("accuracy", "Accuracy", "#ff7f0e", 15),
+    ("recall", "Recall", "#2ca02c", 8),
+)
 SAME = "same as training"
 SHIFTED = "shifted camera"
 SEVERITY = {"ok": "success", "warn": "warning", "drift": "error"}
@@ -141,6 +153,7 @@ class Monitor(pn.viewable.Viewer):
     sheet = param.Parameter(default=None)
 
     production_md = param.String(default="Loading...")
+    provenance_md = param.String(default="")
     drift_message = param.String(default="")
     drift_severity = param.Selector(default="success", objects=list(SEVERITY.values()))
     notice = param.String(default="")
@@ -171,6 +184,7 @@ class Monitor(pn.viewable.Viewer):
             sizing_mode="stretch_width",
         )  # fmt: skip
         production = pn.ui.Markdown(self.param.production_md, sizing_mode="stretch_width")
+        provenance = pn.ui.Markdown(self.param.provenance_md, sizing_mode="stretch_width")
         kpis = pn.ui.Row(
             pn.indicators.Number(
                 name="F1 (test)", value=self.param.prod_f1, format="{value:.3f}",
@@ -190,11 +204,12 @@ class Monitor(pn.viewable.Viewer):
         runs_plot = hv.DynamicMap(self._runs_plot) * hv.DynamicMap(
             pn.bind(self._threshold_line, self.param.min_f1)
         )
-        runs_pane = pn.pane.HoloViews(runs_plot, sizing_mode="stretch_width")
+        # Same-named dimensions on different panes would otherwise share an axis range.
+        runs_pane = pn.pane.HoloViews(runs_plot, sizing_mode="stretch_width", linked_axes=False)
         sheet = pn.ui.PNG(self.param.sheet, sizing_mode="stretch_width")
         table = pn.ui.Tabulator(
             self.param.predictions, disabled=True, show_index=False, layout="fit_columns",
-            pagination=None, height=330, sizing_mode="stretch_width",
+            pagination=None, height=420, sizing_mode="stretch_width",
             hidden_columns=["image"],
         )  # fmt: skip
 
@@ -209,7 +224,7 @@ class Monitor(pn.viewable.Viewer):
         hists = [
             pn.pane.HoloViews(
                 hv.DynamicMap(pn.bind(self._feature_hist, name, self.param.drift_values)),
-                sizing_mode="stretch_width",
+                sizing_mode="stretch_width", linked_axes=False,
             )
             for name in FEATURES
         ]
@@ -220,18 +235,33 @@ class Monitor(pn.viewable.Viewer):
                 sx={"p": 2, "height": "100%"}, sizing_mode="stretch_width",
             )  # fmt: skip
 
+        def halves(left, right, left_md=6):
+            return pn.ui.Grid(
+                pn.ui.Grid(left, size={"xs": 12, "md": left_md}),
+                pn.ui.Grid(right, size={"xs": 12, "md": 12 - left_md}),
+                container=True, spacing=2, sizing_mode="stretch_width",
+            )  # fmt: skip
+
         grid = pn.ui.Grid(
             pn.ui.Grid(notice, size={"xs": 12}),
             pn.ui.Grid(card(production, title="Production model"), size={"xs": 12, "md": 7}),
-            pn.ui.Grid(card(kpis, title="Held-out test metrics"), size={"xs": 12, "md": 5}),
-            pn.ui.Grid(card(runs_pane, title="Metrics across runs"), size={"xs": 12, "md": 7}),
             pn.ui.Grid(
-                card(sheet, table, title="Recent predictions"), size={"xs": 12, "md": 5}
+                card(kpis, provenance, title="Held-out test metrics"), size={"xs": 12, "md": 5}
+            ),
+            pn.ui.Grid(card(runs_pane, title="Metrics across runs"), size={"xs": 12}),
+            pn.ui.Grid(
+                card(halves(sheet, table, left_md=7), title="Recent predictions"), size={"xs": 12}
             ),
             pn.ui.Grid(
                 card(
                     drift_alert,
-                    pn.ui.Row(*hists, sizing_mode="stretch_width"),
+                    pn.ui.Grid(
+                        *[pn.ui.Grid(h, size={"xs": 12, "md": 4}) for h in hists],
+                        container=True, spacing=2, sizing_mode="stretch_width",
+                    ),
+                    pn.ui.Typography(
+                        "Blue: incoming batch. Red: training sample.", variant="caption"
+                    ),
                     drift_table,
                     title="Input drift against the training distribution",
                 ),
@@ -279,21 +309,23 @@ class Monitor(pn.viewable.Viewer):
         frame = frame.iloc[::-1].reset_index(drop=True)
         marks = frame["production"].map({True: " *", False: ""})
         frame["label"] = frame["run"].astype(str).map(_axis_label) + marks
-        shown = ("approved_", "eval_", "edge_", PRODUCTION_TAG)
-        tags = [t for t in run.tags if t.startswith(shown)]
+        shown = ("approved_", "eval_", "edge_")
+        # Exact match for the production tag: the platform adds internal tags that start with it.
+        tags = [t for t in run.tags if t == PRODUCTION_TAG or t.startswith(shown)]
+        run_label = _axis_label(run.pathspec.rsplit("/", 1)[-1])
         edge_tags = [t.split(":", 1)[1] for t in run.tags if t.startswith("edge_image:")]
         edge = edge_tags[0] if edge_tags else "not built"
         self.param.update(
             runs=frame,
             production_md="\n\n".join(
                 [
-                    f"**Run** `{run.pathspec}`  \n**Model version** `{run.model_version}`  \n"
+                    f"**Run** `{run_label}` on `{branch_label(run.tags) or 'n/a'}`  \n"
+                    f"**Model version** `{run.model_version}`  \n"
                     f"**Architecture** {run.arch}",
-                    f"**Dataset sha256** `{run.dataset_hash}`",
-                    f"**Edge image** `{edge}`",
-                    "**Tags** " + (" ".join(f"`{t}`" for t in sorted(tags)) or "none"),
+                    f"**Dataset sha256** `{run.dataset_hash[:16]}...`  \n**Edge image** `{edge}`",
                 ]
             ),
+            provenance_md="**Tags** " + (" ".join(f"`{t}`" for t in sorted(tags)) or "none"),
             prod_f1=run.metrics["f1"],
             prod_accuracy=run.metrics["accuracy"],
             prod_recall=run.metrics["recall"],
@@ -339,7 +371,7 @@ class Monitor(pn.viewable.Viewer):
             self.param.update(
                 predictions=predictions,
                 sheet=contact_sheet(
-                    batch.images[sample], batch.labels[sample], probs[sample], columns=3
+                    batch.images[sample], batch.labels[sample], probs[sample], columns=4
                 ),
                 drift_values=values,
                 drift_table=report.round({"psi": 3}),
@@ -363,19 +395,21 @@ class Monitor(pn.viewable.Viewer):
 
     @param.depends("runs")
     def _runs_plot(self):
-        if self.runs.empty:
-            return hv.NdOverlay(
-                {"f1": hv.Scatter([], "label", "value")}, kdims=["Variable"]
-            ).opts(responsive=True, height=320)
-        # One marker series per metric: an overlay, so Bokeh builds a legend. Grouped bars colour by
-        # a nested axis level and get no legend.
-        return self.runs.hvplot.scatter(
-            x="label", y=["f1", "accuracy", "recall"], ylim=(0, 1.05), legend="bottom",
-            xlabel="run (* = production)", ylabel="", responsive=True, height=320,
-            title="Test metrics per run, dashed line is the promotion threshold",
-        ).opts(
-            # Nested marker sizes: where the metrics nearly coincide the dots read as rings.
-            hv.opts.Scatter(size=hv.Cycle([22, 15, 8]), line_color="white", line_width=1)
+        """One marker series per metric, drawn explicitly. An overlay gets a Bokeh legend (grouped
+        bars do not), and nested marker sizes make near-identical metrics read as rings."""
+        frame = self.runs
+        series = {}
+        for key, title, color, size in METRIC_STYLE:
+            data = frame.assign(score=frame[key]) if key in frame else frame.assign(score=[])
+            series[title] = hv.Scatter(data, "label", "score").opts(
+                color=color, size=size, line_color="white", line_width=1, tools=["hover"]
+            )
+        return hv.NdOverlay(series, kdims=["metric"]).opts(
+            hv.opts.NdOverlay(
+                legend_position="bottom", responsive=True, height=300, ylim=(0, 1.05),
+                xlabel="run (* = production)", ylabel="score",
+                title="Held-out test metrics per run, dashed line is the promotion threshold",
+            )
         )  # fmt: skip
 
     @staticmethod
@@ -384,12 +418,14 @@ class Monitor(pn.viewable.Viewer):
 
     @staticmethod
     def _feature_hist(feature, values):
-        data = values[values["feature"] == feature]
+        data = values[values["feature"] == feature].rename(columns={"value": feature})
         if data.empty:
             return hv.NdOverlay({"training": hv.Histogram(([0.0, 1.0], [0.0]))}, kdims=["source"])
+        # The dimension carries the feature name so Panel does not link the three axes together.
         return data.hvplot.hist(
-            "value", by="source", bins=20, alpha=0.55, normed=True, legend="bottom",
-            xlabel="", ylabel="density", title=feature, responsive=True, height=220,
+            feature, by="source", bins=20, alpha=0.6, normed=True, legend=False,
+            color=["#1f77b4", "#d62728"],  # groups sort as batch, training
+            xlabel=feature, ylabel="density", title=feature, responsive=True, height=220,
         )  # fmt: skip
 
     def __panel__(self):

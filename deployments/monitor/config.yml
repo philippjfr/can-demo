@@ -13,17 +13,18 @@ resources:
 # Deliberately no torch: the dashboard needs ONNX inference, data generation and the Client API.
 dependencies:
   python: "3.12"
+  # Pinned to the versions the dashboard is tested with locally (pixi.lock).
   pypi:
-    numpy: ""
-    pandas: ""
-    pillow: ""
-    onnxruntime: ""
-    outerbounds: ""
-    panel: ""
-    panel-material-ui: ""
-    hvplot: ""
-    holoviews: ""
-    bokeh: ""
+    numpy: "2.5.4"
+    pandas: "3.1.1"
+    pillow: "13.0.0"
+    onnxruntime: "1.31.1"
+    outerbounds: "0.12.56"
+    panel: "1.10.0"
+    panel-material-ui: "0.16.6"
+    hvplot: "0.12.2"
+    holoviews: "1.23.2"
+    bokeh: "3.10.0"
 
 commands:
   - panel serve deployments/monitor/app.py --port 8000 --address 0.0.0.0 --warm --allow-websocket-origin="$DASHBOARD_WS_ORIGIN"
