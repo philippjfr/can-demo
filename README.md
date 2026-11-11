@@ -92,7 +92,7 @@ dataset sha256: ced936f2033808af0715c636ebf61d8c650fba793d44902618eb0a08d857bc02
 preview: data/preview.png
 ```
 
-Look at `data/preview.png` (top row normal, bottom row fallen can), then the notebook: dataset hash, a test confusion matrix such as `[[150, 0], [3, 147]]` (F1 about 0.99), and an ONNX parity line with `passed: True`. On a laptop training takes one to five minutes depending on load. Files land in `artifacts/local/`.
+Look at `data/preview.png` (top row normal, bottom row fallen can), then the notebook: dataset hash, a test confusion matrix such as `[[150, 0], [3, 147]]` (F1 about 0.99), and an ONNX parity line with `passed: True`. Training takes about 8 minutes on a busy laptop and a few minutes when idle (torch is capped at 4 threads by `pixi.toml`, because the default of all cores thrashes under load). Files land in `artifacts/local/`.
 
 The dataset hash is the same on every machine (verified between an arm64 laptop and the x86 platform). Trained metrics differ in the third decimal between machines because floating point training is not bit-identical.
 

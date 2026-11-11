@@ -46,6 +46,9 @@ scripts = ["config/activate.sh"]
 
 [activation.env]
 PYTHONPATH = "$PIXI_PROJECT_ROOT/src"
+# torch defaults to every core, which thrashes on a busy laptop (minutes per epoch). Four threads
+# are fast on an idle machine and stay usable on a loaded one; results do not depend on the count.
+OMP_NUM_THREADS = "4"
 
 [tasks]
 setup = { cmd = "python scripts/demo.py setup", description = "Create config/demo.env and check the platform connection" }
