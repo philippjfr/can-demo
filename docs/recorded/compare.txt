@@ -1,4 +1,4 @@
-$ make compare
+$ pixi run compare
 Runs of TrainCanDetectorFlow, newest first. Promotion threshold: F1 >= 0.90
 
   run     created               arch  epochs  images     f1 accuracy recall    dataset production           approved_by    gate

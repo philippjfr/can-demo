@@ -183,3 +183,8 @@ With `philippjfr/can-demo` and two machine users (`can-demo-pr` restricted to th
 ### Not verified
 
 A local `docker build` (GitHub Actions built the image), whether `@anaconda_base` uses organisation channels automatically, and the dashboard page rendering on the platform (the app uses Browser SSO so it could not be opened headless; its startup log confirms Client API access from inside the container).
+
+### Later changes
+
+- The repository was restructured as an Outerbounds project (`obproject.toml`, `flows/<name>/flow.py` as `ProjectFlow`, `deployments/monitor`, `obproject-deploy` in CI). The earlier plain `@project` deployments showed as a legacy project with nothing under `main`.
+- The Makefile was replaced by pixi tasks (`pixi.toml`) and the conda `environment.yml` by the pixi environment.

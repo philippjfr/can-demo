@@ -24,6 +24,7 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
 filterwarnings = ["ignore::DeprecationWarning", "ignore::UserWarning"]
 
 [tool.ruff]

@@ -150,3 +150,12 @@ def test_image_tag_is_docker_safe():
 
     assert image_tag("20261103-argo-flow/73007@x") == "20261103-argo-flow-73007-x"
     assert len(image_tag("a" * 300)) == 128
+
+
+def test_branch_label_matches_the_project_ui():
+    from candetect.promotion import branch_label
+
+    assert branch_label({"project_branch:user.jane@example.com"}) == "scratch"
+    assert branch_label({"project_branch:prod"}) == "main"
+    assert branch_label({"project_branch:test.demo_fewer_epochs"}) == "demo_fewer_epochs"
+    assert branch_label({"user:jane"}) == ""

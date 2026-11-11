@@ -12,6 +12,7 @@ from metaflow import Flow, Run, namespace
 
 from candetect.config import TRAIN_FLOW, settings
 from candetect.promotion import summarize_run
+from candetect.report import short_id
 
 
 def pick_runs(run_ids: list[str], limit: int) -> list[Run]:
@@ -40,6 +41,7 @@ def main() -> int:
         return 1
     rows = [summarize_run(r, args.min_f1) for r in runs]
     frame = pd.DataFrame(rows).drop(columns=["gate_reasons", "pathspec", "precision", "parity"])
+    frame["run"] = frame["run"].astype(str).map(short_id)
     frame["production"] = frame["production"].map({True: "yes", False: ""})
     for col in ("f1", "accuracy", "recall"):
         frame[col] = frame[col].map(lambda v: "" if v is None else f"{v:.4f}")

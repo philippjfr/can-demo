@@ -12,3 +12,4 @@ build/
 *.safetensors
 .ob_apps/
 project_spec.json
+.pixi/

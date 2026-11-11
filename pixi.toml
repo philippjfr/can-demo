@@ -1,0 +1,67 @@
+[workspace]
+name = "candetect-demo"
+version = "0.1.0"
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "linux-64"]
+
+[dependencies]
+python = "3.12.*"
+numpy = "*"
+pillow = "*"
+pandas = "*"
+pytorch = "*"
+torchvision = "*"
+safetensors = "*"
+onnx = "*"
+onnxscript = "*"
+onnxruntime = "*"
+panel = "*"
+panel-material-ui = "*"
+hvplot = "*"
+bokeh = "*"
+holoviews = "*"
+jupyterlab = "*"
+ipykernel = "*"
+nbclient = "*"
+nbformat = "*"
+pyyaml = "*"
+# botocore (via outerbounds) needs python-dateutil < 3; conda-forge resolves 4.x otherwise.
+python-dateutil = "<3"
+pytest = "*"
+ruff = "*"
+
+# Pinned to the versions verified together on gtm-01. The unpinned resolve overflows uv's stack
+# and falls back to a placeholder outerbounds 0.1.0 release.
+[pypi-dependencies]
+outerbounds = "==0.12.56"
+ob-metaflow = "==2.19.39.2"
+ob-metaflow-extensions = "==1.6.37"
+ob-metaflow-stubs = "==6.0.12.56"
+ob-project-utils = "==0.2.42"
+
+[activation]
+# candetect is imported from src/ (no editable install, so no stale egg-info is ever packaged),
+# and config/demo.env is loaded into every task.
+scripts = ["config/activate.sh"]
+
+[activation.env]
+PYTHONPATH = "$PIXI_PROJECT_ROOT/src"
+
+[tasks]
+setup = { cmd = "python scripts/demo.py setup", description = "Create config/demo.env and check the platform connection" }
+data = { cmd = "python -W ignore -m candetect.data && echo && echo 'Next: open data/preview.png (top row normal, bottom row fallen can), then pixi run train-local or open notebooks/01_train_locally.ipynb.'", description = "Step 1a: generate the synthetic dataset and print its hash" }
+train-local = { cmd = "jupyter nbconvert --to notebook --execute --inplace --ExecutePreprocessor.timeout=3600 notebooks/01_train_locally.ipynb && echo && echo 'Next: artifacts/local/ holds model.safetensors, model.onnx and summary.json. Then pixi run run-remote.'", description = "Step 1b: run notebook 01 headless (dataset, training, ONNX export)" }
+flow-local = { cmd = "python -W ignore flows/train/flow.py run --n-images 300 --epochs 1", env = { CANDETECT_LOCAL = "1" }, description = "Debug only: run the flow on this machine with a tiny configuration" }
+run-remote = { cmd = "python -W ignore flows/train/flow.py --environment=$CANDETECT_METAFLOW_ENV run --with kubernetes && echo && echo \"Next: open the run link above in the Outerbounds UI and look at the 'summary' card: metrics, confusion matrix and dataset sha256. Then pixi run load-local.\"", description = "Steps 2-3: run the flow on platform compute" }
+load-local = { cmd = "CANDETECT_RUN={{ run }} jupyter nbconvert --to notebook --execute --inplace notebooks/02_load_model_locally.ipynb && echo && echo 'Next: pixi run compare to see all runs side by side.'", args = [{ arg = "run", default = "" }], description = "Step 4: notebook 02 (load weights from a platform run, infer locally). Optional run pathspec" }
+compare = { cmd = "python -W ignore scripts/compare.py {{ run }} && echo && echo 'Next: pick the best run and pixi run promote <run id>.'", args = [{ arg = "run", default = "" }], description = "Step 5a: compare recent runs" }
+promote = { cmd = "python -W ignore scripts/promote.py {{ run }}", args = [{ arg = "run" }], description = "Step 5b: gate on the evaluation threshold, tag production, start the image build" }
+build-image = { cmd = "python -W ignore scripts/promote.py --build-only && echo && echo 'Next: watch the build-image workflow in GitHub Actions, then pixi run deploy-dashboard.'", description = "Step 6: (re)start the edge image build for the current production model" }
+deploy-dashboard = { cmd = "python scripts/demo.py deploy-dashboard", description = "Step 8: deploy the monitoring dashboard (what CI does on main)" }
+pr-preview = { cmd = "python scripts/demo.py pr-preview --train-args '{{ train_args }}'", args = [{ arg = "train_args", default = "" }], description = "Rehearse ci.yml on this git branch: deploy a branch copy, train, compare with production" }
+pr-preview-clean = { cmd = "python scripts/demo.py pr-clean", description = "Tear down everything pr-preview deployed for this git branch" }
+reset = { cmd = "python scripts/demo.py reset", description = "Clear local outputs and the production tag so the demo can start over" }
+dashboard = { cmd = "panel serve deployments/monitor/app.py --dev --show", description = "Serve the dashboard locally against the platform" }
+dashboard-mock = { cmd = "panel serve deployments/monitor/app.py --dev --show", env = { DASHBOARD_MOCK = "1" }, description = "Serve the dashboard locally from the notebook 01 artifacts" }
+test = { cmd = "pytest -q", description = "Run the unit tests" }
+lint = { cmd = "ruff check src tests flows scripts deployments edge manual_tests", description = "Run ruff with the repository config" }

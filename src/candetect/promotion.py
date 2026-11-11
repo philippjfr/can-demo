@@ -110,6 +110,15 @@ def image_tag(model_version: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]", "-", model_version)[:128]
 
 
+def branch_label(tags) -> str:
+    """Project branch of a run as the project UI names it: laptop runs are ``scratch``, the
+    production Metaflow branch ``prod`` is ``main``."""
+    branch = next((t.split(":", 1)[1] for t in tags if t.startswith("project_branch:")), "")
+    if branch.startswith("user."):
+        return "scratch"
+    return {"prod": "main"}.get(branch, branch.removeprefix("test."))
+
+
 def summarize_run(run, min_f1: float) -> dict:
     """One row for ``scripts/compare.py``: key parameters, metrics, tags and gate status."""
     data = run.data
@@ -126,6 +135,7 @@ def summarize_run(run, min_f1: float) -> dict:
     return {
         "run": run.id,
         "pathspec": run.pathspec,
+        "branch": branch_label(run.tags),
         "created": run.created_at.strftime("%m-%d %H:%M"),
         "arch": getattr(data, "arch_used", "?"),
         "epochs": getattr(data, "epochs", None),
