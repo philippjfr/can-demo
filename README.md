@@ -174,6 +174,7 @@ pixi run build-image    # redo the build for the current production run
 Two platform details found while building:
 
 - onnxruntime requests an executable stack, which glibc 2.41 (the platform's Debian 13 base image) refuses to load. The flows set `GLIBC_TUNABLES=glibc.rtld.execstack=2` on the steps that import it, and the Dockerfile sets it too so a Debian 13 base image also works.
+- Metaflow packages `src/candetect.egg-info` (left behind by `pip install -e .`) as a distribution with no name when `src/` is on the `PYTHONPATH`, and `import torch` then fails in the pod. pixi does not install `candetect` (it sets `PYTHONPATH=src`), the CI setup action deletes the directory, and the deploy tasks do too.
 - After `argo-workflows create` the event sensor takes a long time to become active. On the test branch it was a few minutes. For the production deployment, events published in the first 30 minutes or so were lost, and the first one that worked came about 35 minutes after the deploy. Events published while the sensor is not active are not queued. Deploy production well ahead of the demo, and do not redeploy shortly before it: any push to `main` runs `deploy.yml` and redeploys production, which resets the sensor. Use `[skip ci]` in commit messages for documentation-only changes.
 
 If this fails live: show `docs/recorded/build_manifest_card.html` and the `edge/Dockerfile` labels, and walk through `.github/workflows/build-image.yml`.
@@ -185,11 +186,11 @@ Repository: `philippjfr/can-demo`. Set the variables above and create the two ma
 Open a pull request that changes the training code, for example lowering `epochs` in `flows/train/flow.py` from 6 to 3, and `ci.yml` does the following:
 
 1. Runs ruff and the tests.
-2. Deploys branch copies of both flows as `test.pr<N>`, tagged with the commit and the CI run.
-3. Triggers a full training run on the branch copy, so the PR's code is what trains, and waits for it.
+2. Deploys a branch copy of the flows with `obproject-deploy` (`test.<git branch>`, flows only, tagged with the commit and the CI run) and registers the project spec for that branch.
+3. Triggers a full training run on the branch copy, so the PR's code is what trains, and waits for it. If the run crashes, the wait ends as soon as Argo reports the failure.
 4. Compares that run with the run tagged `production` and posts the result as a PR comment (edited in place on later pushes). The comment has the metric deltas, whether both runs used the same dataset hash, the promotion gate result, and a better, worse or no-change verdict.
 5. Attaches both model cards as HTML (the `model-cards` artifact). The run's own card on the platform also has a "Compared with the production model" section.
-6. Deletes the branch copies when the PR closes. Fork PRs run tests only because they get no OIDC token.
+6. Tears the branch copy down when the PR closes (`outerbounds flowproject teardown-branch`). Fork PRs run tests only because they get no OIDC token.
 
 Example comment from a real rehearsal (3 epochs against production at 6), saved in `docs/recorded/pr-preview/`:
 
@@ -205,30 +206,28 @@ Example comment from a real rehearsal (3 epochs against production at 6), saved 
 
 The comparison needs a run tagged `production`, so promote one first (step 5). Without one, the comment says there is nothing to compare with.
 
-Merging to `main` runs `deploy.yml`: tests, then `--production argo-workflows create` for both flows. `build-image.yml` is described in step 6.
+Merging to `main` runs `deploy.yml`: tests, then `obproject-deploy`, which deploys both flows as the production branch (`prod` in Metaflow, `main` in the project UI), the dashboard app, and the project spec. `build-image.yml` is described in step 6.
 
 ```
 pixi run pr-preview "--epochs 3"    # the same sequence from your laptop, no GitHub needed
 pixi run pr-preview-clean           # delete the preview deployment afterwards
 ```
 
-`pr-preview` deploys branch `preview`, trains, and writes `build/pr-report/` with `report.md` and both cards. It takes about 6 minutes, most of it pod scheduling and training.
+`pr-preview` runs `obproject-deploy` for your current git branch (it refuses `main`), trains, and writes `build/pr-report/` with `report.md` and both cards. It takes about 6 minutes, most of it pod scheduling and training.
 
-`obproject-deploy` from the Outerbounds docs is an alternative to the explicit `argo-workflows create` commands used here.
+A branch deployment belongs to whoever created it first, and Metaflow refuses redeployments by anyone else without that person's production token. So run `pixi run pr-preview-clean` before pushing the same branch to GitHub, or CI fails with "existing version ... deployed by the user ...". Use a throwaway branch for rehearsals.
 
 If this fails live: show `docs/recorded/pr-preview/report.md` and the two cards next to it, or run `pixi run pr-preview` ahead of time. Nothing in the other steps depends on this one.
 
 ### 8. Monitoring dashboard
 
-```
-pixi run deploy-dashboard
-```
+The dashboard is the `deployments/monitor` app. `obproject-deploy` deploys it from `main` only (`obproject_deploy.toml`), so merging to `main` deploys it, and `pixi run deploy-dashboard` does the same from a `main` checkout. It appears under Deployments in the project UI on the `main` branch.
 
-This stages `app.py` and the `candetect` package into `build/dashboard` and runs `outerbounds app deploy`. The dashboard (Panel and hvPlot) shows the production model with its tags, test metrics, metrics across runs with the promotion threshold, a sample of predictions on a fresh batch, and a drift indicator: population stability index on brightness, contrast and sharpness of a deliberately shifted synthetic batch against the training distribution. Switch the incoming batch to "same as training" in the sidebar to see the indicator return to OK. The app uses Browser authentication, so only people with access to the Outerbounds UI can open it. The URL is printed at the end of the deploy. The first start can take several minutes when the cluster is short of capacity.
+The dashboard (Panel and hvPlot) shows the production model with its tags and edge image, test metrics across runs with the promotion threshold, a sample of predictions on a fresh batch, and a drift indicator: population stability index on brightness, contrast and sharpness of a deliberately shifted synthetic batch against the training distribution. Switch the incoming batch to "same as training" in the sidebar to see the indicator return to OK. The app uses Browser authentication, so only people with access to the Outerbounds UI can open it. Find its URL with `outerbounds app info --name candetect-monitor --project can_detection_demo --branch main`. A cluster short of capacity can delay the first start by several minutes.
 
-To run it locally: `panel serve dashboard/app.py --dev --show`. With `DASHBOARD_MOCK=1` it reads the notebook 01 output in `artifacts/local` instead of the platform.
+To run it locally: `pixi run dashboard`. `pixi run dashboard-mock` reads the notebook 01 output in `artifacts/local` instead of the platform.
 
-If this fails live: `docs/recorded/dashboard.png` is a screenshot, and the local `panel serve` works with live platform data or `DASHBOARD_MOCK=1`.
+If this fails live: `docs/recorded/dashboard.png` is a screenshot, and the local dashboard works with live platform data or the mock.
 
 ### Reset
 
@@ -236,7 +235,7 @@ If this fails live: `docs/recorded/dashboard.png` is a screenshot, and the local
 pixi run reset
 ```
 
-Removes `data/`, `artifacts/` and `build/`, and clears the `production` and approval tags on all runs. Platform runs and deployments are not deleted. To remove a branch deployment: `python flows/train_flow.py --environment=fast-bakery --branch <name> argo-workflows delete`. To remove the dashboard: `outerbounds app delete --name candetect-monitor --project can_detection_demo --branch prod`.
+Removes `data/`, `artifacts/` and `build/`, and clears the `production` and approval tags on all runs. Platform runs and deployments are not deleted. To remove a branch deployment, check out that branch and run `pixi run pr-preview-clean`. To remove the dashboard: `outerbounds app delete --name candetect-monitor --project can_detection_demo --branch main`.
 
 ## Tests and lint
 
