@@ -67,5 +67,6 @@ pr-preview-clean = { cmd = "python scripts/demo.py pr-clean", description = "Tea
 reset = { cmd = "python scripts/demo.py reset", description = "Clear local outputs and the production tag so the demo can start over" }
 dashboard = { cmd = "panel serve deployments/monitor/app.py --dev --show", description = "Serve the dashboard locally against the platform" }
 dashboard-mock = { cmd = "panel serve deployments/monitor/app.py --dev --show", env = { DASHBOARD_MOCK = "1" }, description = "Serve the dashboard locally from the notebook 01 artifacts" }
+lab = { cmd = "jupyter lab notebooks/", description = "Open the demo notebooks in JupyterLab" }
 test = { cmd = "pytest -q", description = "Run the unit tests" }
 lint = { cmd = "ruff check src tests flows scripts deployments edge manual_tests", description = "Run ruff with the repository config" }
