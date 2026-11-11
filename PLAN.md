@@ -178,7 +178,7 @@ What changed from the plan above, and what the platform actually did.
 
 ### Verified on GitHub afterwards
 
-With `philippjfr/can-demo` and two machine users (`can-demo-pr` restricted to the `ci` workflow, `can-demo-main` restricted to `main`): OIDC authentication for both, the production deployment (which issued the production tokens), a pull request that trained on a branch deployment and received the comparison comment and the `model-cards` artifact, and `build-image.yml` end to end (fetch with the production-tag check, build, label check, prediction inside the image, push to GHCR, `edge_image:` tag written to the run). The production event sensor took roughly 35 minutes to become active after the deploy.
+With `philippjfr/can-demo` and two machine users (`can-demo-pr` restricted to the `ci` workflow, `can-demo-main` restricted to `main`): OIDC authentication for both, the production deployment (which issued the production tokens), a pull request that trained on a branch deployment and received the comparison comment and the `model-cards` artifact, and `build-image.yml` end to end (fetch with the production-tag check, build, label check, prediction inside the image, push to GHCR, `edge_image:` tag written to the run). The production event sensor took between 40 and 75 minutes to become active after a deploy.
 
 ### Not verified
 
