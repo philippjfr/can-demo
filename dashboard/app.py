@@ -24,6 +24,7 @@ from candetect.data import CLASS_NAMES, DataConfig, generate_dataset, shifted_co
 from candetect.drift import FEATURES, drift_report, image_features, overall_status
 from candetect.inference import LoadedRun, contact_sheet, load_run
 from candetect.promotion import summarize_run
+from candetect.report import short_id
 
 log = logging.getLogger("candetect.dashboard")
 log.setLevel(logging.INFO)
@@ -124,9 +125,8 @@ def default_source():
     return MockSource() if os.environ.get("DASHBOARD_MOCK") == "1" else PlatformSource()
 
 
-def _hide_inner_ticks(plot, element):
-    """Grouped bars repeat the metric names under every run; the legend already names them."""
-    plot.state.xaxis[0].major_label_text_alpha = 0
+def _axis_label(run_id: str) -> str:
+    return short_id(run_id).rsplit("-", 1)[-1]
 
 
 class Monitor(pn.viewable.Viewer):
@@ -274,8 +274,11 @@ class Monitor(pn.viewable.Viewer):
         self._reference = image_features(reference.images)
 
         frame = pd.DataFrame(rows)
+        # Oldest run first so time reads left to right, and the last Argo id segment as the label
+        # because the full ids of branch and production deployments are far too long for an axis.
+        frame = frame.iloc[::-1].reset_index(drop=True)
         marks = frame["production"].map({True: " *", False: ""})
-        frame["label"] = frame["run"].astype(str) + marks
+        frame["label"] = frame["run"].astype(str).map(_axis_label) + marks
         shown = ("approved_", "eval_", "edge_", PRODUCTION_TAG)
         tags = [t for t in run.tags if t.startswith(shown)]
         edge_tags = [t.split(":", 1)[1] for t in run.tags if t.startswith("edge_image:")]
@@ -361,12 +364,19 @@ class Monitor(pn.viewable.Viewer):
     @param.depends("runs")
     def _runs_plot(self):
         if self.runs.empty:
-            return hv.Bars([], ["label", "Variable"], "value").opts(responsive=True, height=320)
-        return self.runs.hvplot.bar(
-            x="label", y=["f1", "accuracy", "recall"], ylim=(0, 1.05), rot=0, legend="bottom",
+            return hv.NdOverlay(
+                {"f1": hv.Scatter([], "label", "value")}, kdims=["Variable"]
+            ).opts(responsive=True, height=320)
+        # One marker series per metric: an overlay, so Bokeh builds a legend. Grouped bars colour by
+        # a nested axis level and get no legend.
+        return self.runs.hvplot.scatter(
+            x="label", y=["f1", "accuracy", "recall"], ylim=(0, 1.05), legend="bottom",
             xlabel="run (* = production)", ylabel="", responsive=True, height=320,
             title="Test metrics per run, dashed line is the promotion threshold",
-        ).opts(hooks=[_hide_inner_ticks])  # fmt: skip
+        ).opts(
+            # Nested marker sizes: where the metrics nearly coincide the dots read as rings.
+            hv.opts.Scatter(size=hv.Cycle([22, 15, 8]), line_color="white", line_width=1)
+        )  # fmt: skip
 
     @staticmethod
     def _threshold_line(min_f1):
@@ -376,7 +386,7 @@ class Monitor(pn.viewable.Viewer):
     def _feature_hist(feature, values):
         data = values[values["feature"] == feature]
         if data.empty:
-            return hv.NdOverlay({}, kdims=["source"])
+            return hv.NdOverlay({"training": hv.Histogram(([0.0, 1.0], [0.0]))}, kdims=["source"])
         return data.hvplot.hist(
             "value", by="source", bins=20, alpha=0.55, normed=True, legend="bottom",
             xlabel="", ylabel="density", title=feature, responsive=True, height=220,
