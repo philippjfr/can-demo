@@ -82,3 +82,9 @@ def test_short_id_keeps_numbers_and_shortens_argo_ids():
 
     assert short_id("73007") == "73007"
     assert short_id("argo-candeondemo.test.pr7.traincatorflow-dapqv-9mt94") == "dapqv-9mt94"
+
+
+def test_short_id_for_production_ids_has_a_single_hash():
+    from candetect.report import short_id
+
+    assert short_id("argo-candetectiondemo.prod.traincandetectorflow-kj856") == "kj856"

@@ -9,8 +9,12 @@ METRICS = (("f1", "F1"), ("accuracy", "Accuracy"), ("precision", "Precision"), (
 
 
 def short_id(run_id: str) -> str:
-    """Numeric run ids unchanged; Argo ids (``argo-<workflow>-<a>-<b>``) as ``<a>-<b>``."""
-    return run_id if run_id.isdigit() else "-".join(run_id.split("-")[-2:])
+    """Numeric run ids unchanged. Argo ids are ``argo-<template>-<hash>`` on production and
+    ``argo-<template>-<hash>-<hash>`` on test branches: keep the trailing hashes."""
+    if run_id.isdigit() or "-" not in run_id:
+        return run_id
+    parts = run_id.split("-")[1:]
+    return "-".join(parts[-2:]) if len(parts) >= 3 else parts[-1]
 
 
 def run_state(run) -> str:

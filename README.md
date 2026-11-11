@@ -29,11 +29,11 @@ If two perimeters are available, set `CANDETECT_PERIMETER_EXPERIMENT` and `CANDE
 
 ## What was verified, and what was not
 
-Run against the real platform and GitHub (repository `philippjfr/can-demo`): the training flow and its card, loading a platform run in a notebook, compare and promote (including the refusal), the promotion event starting the deployed build flow, the dashboard app deployment, and all three GitHub workflows. That includes OIDC authentication with both machine users, the production deployment from `deploy.yml`, a pull request that trained on a branch deployment and received the comparison comment and model cards, and `build-image.yml`, which built the edge image, checked its labels, ran a prediction inside it, pushed it to GHCR and recorded it on the model run.
+Run against the real platform and GitHub (repository `philippjfr/can-demo`): the training flow and its card, loading a platform run in a notebook, compare and promote (including the refusal), the promotion event starting the deployed build flow, and all three GitHub workflows. That includes OIDC authentication with both machine users, `obproject-deploy` for pull request branches and for `main` (flows, dashboard app and project spec, with `flowproject get-metadata` returning the `main` branch), a pull request that trained on a branch deployment and received the comparison comment and model cards, the branch teardown, a training run on the production deployment that was then promoted, and `build-image.yml`, which built the edge image, checked its labels, ran a prediction inside it, pushed it to GHCR and recorded it on the model run.
 
-The dashboard was tested against live platform data locally and in a browser. The deployed app uses Browser SSO, so it could not be opened headless. Its startup log (`outerbounds app logs --name candetect-monitor --project can_detection_demo --branch prod --worker-id <id>`) confirms that the Metaflow Client API works from inside the app container: `read 4 runs from platform; model run TrainCanDetectorFlow/73007`. The page itself has not been viewed in a browser on the platform.
+The dashboard was tested against live platform data locally and in a browser. The deployed app uses Browser SSO, so it could not be opened headless. Its startup log (`outerbounds app logs --name candetect-monitor --project can_detection_demo --branch main --worker-id <id>`) confirms that the Metaflow Client API works from inside the app container. The page itself has not been viewed in a browser on the platform.
 
-Not verified: a local `docker build` (the image was built by GitHub Actions instead), and whether `@anaconda_base` uses organisation channels automatically.
+Not verified: a local `docker build` (the image was built by GitHub Actions instead), whether `@anaconda_base` uses organisation channels automatically, and the project UI itself (checked through the `flowproject` CLI and the CLI's template listing, not in a browser).
 
 ## Setup
 
@@ -113,6 +113,8 @@ pixi run run-remote
 This runs `python flows/train/flow.py --environment=fast-bakery run --with kubernetes`. Expected: an image bake (about 30 seconds, cached afterwards), a pod that can wait a minute or two to be scheduled, then roughly 30 seconds of training on 4 CPUs, ending with `model 20261103-<run id> f1=0.9933`. The log line `dataset sha256: ced936f2...` matches the laptop.
 
 Look at the run in the Outerbounds UI and open the card `summary`: test metrics, confusion matrix, dataset sha256, ONNX parity, training history and a sheet of sample predictions with green or red borders. `docs/recorded/train_card.html` is a saved copy.
+
+To train on the production deployment instead (what the project UI shows under `main`), use `pixi run train-main`.
 
 If this fails live: open `docs/recorded/train_card.html` in a browser, or pick any earlier run in the UI. Run the first remote run once before the demo so the image is cached.
 
