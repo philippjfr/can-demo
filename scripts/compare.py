@@ -31,7 +31,7 @@ def pick_runs(run_ids: list[str], limit: int) -> list[Run]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("runs", nargs="*", help="run ids or pathspecs; default: newest runs")
-    parser.add_argument("--limit", type=int, default=6)
+    parser.add_argument("--limit", type=int, default=10)
     parser.add_argument("--min-f1", type=float, default=settings().min_f1)
     args = parser.parse_args()
 

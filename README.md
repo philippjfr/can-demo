@@ -1,8 +1,8 @@
-# Dead plate detection on a can line: Anaconda AI Orchestration demo
+# Dead plate detection on a can line: AI Workflow Orchestration demo
 
 A synthetic top-down view of a conveyor plate is classified as `normal` or `fallen_can`. The demo follows one model from a laptop notebook to a production tag, an edge container image and a monitoring dashboard, on Anaconda AI Orchestration (Outerbounds and Metaflow). Everything runs on CPU in a few minutes and uses only Apache, BSD or MIT dependencies. There is no Ultralytics or other AGPL code.
 
-PLAN.md records what was verified against the installed CLIs and the docs before any code was written, and the decisions that followed.
+`DEMO_SCRIPT.md` is the presenter's play-by-play with timings, talk track and a fallback for every step. PLAN.md records what was verified against the installed CLIs and the docs before any code was written, and the decisions that followed.
 
 ## An Outerbounds project, and a single perimeter
 
