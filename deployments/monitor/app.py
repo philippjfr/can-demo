@@ -80,7 +80,7 @@ class PlatformSource:
         for run in flow:
             if run.successful:
                 return load_run(run.pathspec), False
-        raise LookupError("no successful runs yet; run `make run-remote`")
+        raise LookupError("no successful runs yet; run `pixi run run-remote`")
 
 
 class MockSource:

@@ -64,7 +64,7 @@ def latest_successful_run(flow_name: str = TRAIN_FLOW) -> str:
     for run in Flow(flow_name):
         if run.successful:
             return run.pathspec
-    raise LookupError(f"no successful {flow_name} run found; run `make run-remote` first")
+    raise LookupError(f"no successful {flow_name} run found; run `pixi run run-remote` first")
 
 
 def load_run(pathspec: str) -> LoadedRun:

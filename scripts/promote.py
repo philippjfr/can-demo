@@ -44,7 +44,7 @@ def start_build(run: Run, approver: str, branch: str, build_workflow: bool) -> N
         return
     if not cfg.github_repo or cfg.github_repo.startswith("OWNER/"):
         print("CANDETECT_GITHUB_REPO is not set, so the GitHub build was not started.")
-        print("Set it in config/demo.env and run `make build-image`.")
+        print("Set it in config/demo.env and run `pixi run build-image`.")
         return
     if not shutil.which("gh"):
         print("The gh CLI is not installed, so the GitHub build was not started.")
@@ -93,7 +93,7 @@ def cmd_build_only(args) -> int:
     namespace(None)
     current = production_runs()
     if not current:
-        print("No run has the production tag. Use `make promote RUN=<id>` first.")
+        print("No run has the production tag. Use `pixi run promote <run id>` first.")
         return 1
     run = current[0]
     approver = next(

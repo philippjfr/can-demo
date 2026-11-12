@@ -37,7 +37,7 @@ def main() -> int:
 
     runs = pick_runs(args.runs, args.limit)
     if not runs:
-        print("No successful runs found. Run `make run-remote` first.")
+        print("No successful runs found. Run `pixi run run-remote` first.")
         return 1
     rows = [summarize_run(r, args.min_f1) for r in runs]
     frame = pd.DataFrame(rows).drop(columns=["gate_reasons", "pathspec", "precision", "parity"])

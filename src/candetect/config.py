@@ -1,6 +1,6 @@
 """Deployment-specific settings, read from environment variables.
 
-Values are loaded from ``config/demo.env`` by the Makefile and by the GitHub workflows.
+Values are loaded from ``config/demo.env`` by pixi (config/activate.sh) and by the GitHub workflows.
 Nothing here is secret.
 """
 
